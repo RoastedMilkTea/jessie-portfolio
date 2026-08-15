@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>jessie@uoft:~$</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 0 60px 0;
+  }
+
+  .terminal-window {
+    width: 100%;
+    max-width: 820px;
+    margin-top: 30px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #30363d;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    min-height: 90vh;
+  }
+
+  .title-bar {
+    background: #161b22;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #30363d;
+    user-select: none;
+  }
+  .dot { width: 13px; height: 13px; border-radius: 50%; }
+  .dot.red    { background: #ff5f57; }
+  .dot.yellow { background: #ffbd2e; }
+  .dot.green  { background: #28c840; }
+  .title-text {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    color: #8b949e;
+    margin-right: 42px;
+  }
+
+  .terminal-body {
+    background: #0d1117;
+    padding: 24px 28px 16px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .prompt-user  { color: #79c0ff; }
+  .prompt-host  { color: #56d364; }
+  .prompt-path  { color: #d2a8ff; }
+  .prompt-sym   { color: #c9d1d9; }
+
+  .line { white-space: pre-wrap; word-break: break-word; }
+  .line.dim     { color: #8b949e; }
+  .line.accent  { color: #79c0ff; }
+  .line.green   { color: #56d364; }
+  .line.yellow  { color: #e3b341; }
+  .line.purple  { color: #d2a8ff; }
+  .line.red     { color: #ff7b72; }
+
+  .cursor {
+    display: inline-block;
+    width: 9px;
+    height: 1.1em;
+    background: #c9d1d9;
+    vertical-align: middle;
+    animation: blink 1s step-start infinite;
+    margin-left: 1px;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 28px 18px;
+    gap: 6px;
+    background: #0d1117;
+    border-top: 1px solid #21262d;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+  }
+  .input-row.visible { opacity: 1; pointer-events: all; }
+  .input-prompt { white-space: nowrap; font-size: 15px; }
+  #cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #c9d1d9;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 15px;
+    caret-color: #c9d1d9;
+  }
+
+  .terminal-body::-webkit-scrollbar { width: 6px; }
+  .terminal-body::-webkit-scrollbar-track { background: #0d1117; }
+  .terminal-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="terminal-window">
+  <div class="title-bar">
+    <div class="dot red"></div>
+    <div class="dot yellow"></div>
+    <div class="dot green"></div>
+    <div class="title-text">jessie@uoft: ~</div>
+  </div>
+
+  <div class="terminal-body" id="output"></div>
+
+  <div class="input-row" id="input-row">
+    <span class="input-prompt">
+      <span class="prompt-user">jessie</span><span class="prompt-sym">@</span><span class="prompt-host">uoft</span><span class="prompt-sym">:</span><span class="prompt-path" id="cwd">~</span><span class="prompt-sym">$</span>
+    </span>
+    <input id="cmd-input" type="text" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" />
+  </div>
+</div>
+
+<script>
+(function () {
+  const output   = document.getElementById('output');
+  const cmdInput = document.getElementById('cmd-input');
+  const inputRow = document.getElementById('input-row');
+  const cwdEl    = document.getElementById('cwd');
+
+  const SECTIONS = {
+    'about': () => [
+      { cls: 'accent',  text: '┌─ about jessie zhou ─────────────────────────────┐' },
+      { cls: 'dim',     text: '' },
+      { cls: '',        text: '  Hey! I\'m Jessie — a Computer Engineering student' },
+      { cls: '',        text: '  at the University of Toronto.' },
+      { cls: 'dim',     text: '' },
+      { cls: '',        text: '  I love building things at the intersection of' },
+      { cls: '',        text: '  software, hardware, and design.' },
+      { cls: 'dim',     text: '' },
+      { cls: 'yellow',  text: '  Currently:   2nd year CE @ UofT' },
+      { cls: 'yellow',  text: '  Location:    Toronto, ON' },
+      { cls: 'yellow',  text: '  Languages:   Python · C · Java · JavaScript' },
+      { cls: 'yellow',  text: '  Hobbies:     Music · Coffee · Late-night debugging' },
+      { cls: 'dim',     text: '' },
+      { cls: 'accent',  text: '└──────────────────────────────────────────────────┘' },
+    ],
+    'experience': () => [
+      { cls: 'purple',  text: '┌─ experience ────────────────────────────────────┐' },
+      { cls: 'dim',     text: '' },
+      { cls: 'green',   text: '  [2024]  Software Engineering Intern' },
+      { cls: '',        text: '          Acme Tech · Toronto, ON' },
+      { cls: 'dim',     text: '          Worked on backend APIs and CI pipelines.' },
+      { cls: 'dim',     text: '' },
+      { cls: 'green',   text: '  [2023]  Teaching Assistant' },
+      { cls: '',        text: '          ECE244 — Programming Fundamentals · UofT' },
+      { cls: 'dim',     text: '          Ran weekly labs, graded assignments.' },
+      { cls: 'dim',     text: '' },
+      { cls: 'green',   text: '  [2023]  Hackathon — UofT Hacks X  (Top 10)' },
+      { cls: '',        text: '          Built a real-time campus event aggregator.' },
+      { cls: 'dim',     text: '' },
+      { cls: 'purple',  text: '└──────────────────────────────────────────────────┘' },
+    ],
+    'projects': () => [
+      { cls: 'yellow',  text: '┌─ projects ──────────────────────────────────────┐' },
+      { cls: 'dim',     text: '' },
+      { cls: 'accent',  text: '  terminal-portfolio' },
+      { cls: '',        text: '    This very website. HTML · CSS · Vanilla JS' },
+      { cls: 'dim',     text: '' },
+      { cls: 'accent',  text: '  campusmap' },
+      { cls: '',        text: '    Indoor navigation system for UofT buildings.' },
+      { cls: 'dim',     text: '    React · Leaflet · Node.js' },
+      { cls: 'dim',     text: '' },
+      { cls: 'accent',  text: '  byteshelf' },
+      { cls: '',        text: '    CLI tool that organises messy download folders.' },
+      { cls: 'dim',     text: '    Python · argparse · watchdog' },
+      { cls: 'dim',     text: '' },
+      { cls: 'accent',  text: '  moodboard' },
+      { cls: '',        text: '    Music mood tracker with Spotify integration.' },
+      { cls: 'dim',     text: '    Flask · Spotify API · SQLite' },
+      { cls: 'dim',     text: '' },
+      { cls: 'yellow',  text: '└──────────────────────────────────────────────────┘' },
+    ],
+    'contact': () => [
+      { cls: 'green',   text: '┌─ contact ───────────────────────────────────────┐' },
+      { cls: 'dim',     text: '' },
+      { cls: '',        text: '  Email    →  jessie.zhou@mail.utoronto.ca' },
+      { cls: '',        text: '  GitHub   →  github.com/jessiezhou' },
+      { cls: '',        text: '  LinkedIn →  linkedin.com/in/jessiezhou' },
+      { cls: 'dim',     text: '' },
+      { cls: 'green',   text: '└──────────────────────────────────────────────────┘' },
+    ],
+  };
+
+  const HELP_LINES = [
+    { cls: 'dim',    text: '' },
+    { cls: 'accent', text: 'Available commands:' },
+    { cls: 'dim',    text: '' },
+    { cls: '',       text: '  cd about        →  a little about me' },
+    { cls: '',       text: '  cd experience   →  work & activities' },
+    { cls: '',       text: '  cd projects     →  things i\'ve built' },
+    { cls: '',       text: '  cd contact      →  get in touch' },
+    { cls: '',       text: '  ls              →  list sections' },
+    { cls: '',       text: '  clear           →  clear the terminal' },
+    { cls: '',       text: '  help            →  show this menu' },
+    { cls: 'dim',    text: '' },
+  ];
+
+  function appendLine(text, cls) {
+    const el = document.createElement('div');
+    el.className = 'line' + (cls ? ' ' + cls : '');
+    el.textContent = text;
+    output.appendChild(el);
+    output.scrollTop = output.scrollHeight;
+    return el;
+  }
+
+  function appendLines(lines) { lines.forEach(l => appendLine(l.text, l.cls)); }
+
+  function appendPromptEcho(text) {
+    const el = document.createElement('div');
+    el.className = 'line';
+    el.innerHTML =
+      '<span class="prompt-user">jessie</span>' +
+      '<span class="prompt-sym">@</span>' +
+      '<span class="prompt-host">uoft</span>' +
+      '<span class="prompt-sym">:</span>' +
+      '<span class="prompt-path">' + escHtml(cwdEl.textContent) + '</span>' +
+      '<span class="prompt-sym">$ </span>' +
+      escHtml(text);
+    output.appendChild(el);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function typeText(el, text, speed, cb) {
+    let i = 0;
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    el.appendChild(cursor);
+    function tick() {
+      if (i < text.length) {
+        cursor.before(document.createTextNode(text[i++]));
+        setTimeout(tick, speed);
+      } else {
+        cursor.remove();
+        if (cb) cb();
+      }
+    }
+    tick();
+  }
+
+  function runIntro() {
+    appendLine('Linux 6.8.0-uoft #1 SMP PREEMPT_DYNAMIC', 'dim');
+    appendLine('Booting jessie-portfolio v1.0 ...', 'dim');
+    appendLine('', 'dim');
+
+    setTimeout(function () {
+      var greetEl = appendLine('', 'accent');
+      typeText(greetEl, 'Hi, my name is Jessie Zhou.', 55, function () {
+        setTimeout(function () {
+          var subEl = appendLine('', 'yellow');
+          typeText(subEl, "I'm a Computer Engineering student at the University of Toronto.", 35, function () {
+            setTimeout(function () {
+              appendLine('', 'dim');
+              var hintEl = appendLine('', 'dim');
+              typeText(hintEl, 'Type  help  to see what you can explore.', 30, function () {
+                appendLine('', '');
+                inputRow.classList.add('visible');
+                cmdInput.focus();
+              });
+            }, 300);
+          });
+        }, 400);
+      });
+    }, 900);
+  }
+
+  function handleCommand(raw) {
+    var cmd = raw.trim().toLowerCase();
+    appendPromptEcho(raw.trim());
+    if (!cmd) return;
+
+    if (cmd === 'clear') {
+      output.innerHTML = '';
+      cwdEl.textContent = '~';
+      return;
+    }
+    if (cmd === 'help') { appendLines(HELP_LINES); return; }
+    if (cmd === 'ls') {
+      appendLine('', '');
+      appendLine('  about/    experience/    projects/    contact/', 'accent');
+      appendLine('', '');
+      return;
+    }
+
+    var cdMatch = cmd.match(/^cd\s+(.+)$/);
+    if (cdMatch) {
+      var target = cdMatch[1].trim().replace(/\/$/, '').toLowerCase();
+      if (target === '..' || target === '~' || target === '') {
+        cwdEl.textContent = '~';
+        appendLine('', '');
+        return;
+      }
+      if (SECTIONS[target]) {
+        cwdEl.textContent = '~/' + target;
+        appendLine('', '');
+        appendLines(SECTIONS[target]());
+        appendLine('', '');
+        return;
+      }
+      appendLine('', '');
+      appendLine('  bash: cd: ' + cdMatch[1] + ': No such file or directory', 'red');
+      appendLine('  Hint: try  ls  to see available sections.', 'dim');
+      appendLine('', '');
+      return;
+    }
+
+    appendLine('', '');
+    appendLine('  bash: ' + raw.trim() + ': command not found', 'red');
+    appendLine('  Type  help  for available commands.', 'dim');
+    appendLine('', '');
+  }
+
+  var history = [];
+  var histIdx = -1;
+
+  cmdInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      var val = cmdInput.value;
+      if (val.trim()) { history.unshift(val); histIdx = -1; }
+      cmdInput.value = '';
+      handleCommand(val);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (histIdx < history.length - 1) { histIdx++; cmdInput.value = history[histIdx]; }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histIdx > 0) { histIdx--; cmdInput.value = history[histIdx]; }
+      else { histIdx = -1; cmdInput.value = ''; }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      var val = cmdInput.value.toLowerCase();
+      var prefix = val.replace(/^cd\s+/, '');
+      var match = Object.keys(SECTIONS).find(function(s){ return s.startsWith(prefix); });
+      if (match) cmdInput.value = 'cd ' + match;
+    }
+  });
+
+  output.addEventListener('click', function () { cmdInput.focus(); });
+  runIntro();
+})();
+</script>
+</body>
+</html>
